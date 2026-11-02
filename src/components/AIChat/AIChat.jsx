@@ -57,7 +57,7 @@ export function AIChat() {
               </p>
             ))}
             {pending ? <p className="text-sm text-mute">ИИ печатает...</p> : null}
-            {error ? <p className="text-xs text-mute">{error}. Показан локальный ответ.</p> : null}
+            {error ? <p className="text-xs text-mute">{error}</p> : null}
           </div>
 
           <form onSubmit={onSubmit} className="flex gap-2 border-t border-line p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
