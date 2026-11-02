@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { leadBotSystemPrompt } from "../src/lib/prompt.js";
-import { buildLocalChatReply, shouldUseLocalChat } from "../src/lib/localChat.js";
 import { mockLeadBot } from "../src/lib/mockAI.js";
 import { calcStatus, mergeBANT, withStatus } from "../src/lib/lead.js";
 import { sendLeadToTelegram, sendChatToTelegram } from "./telegram.js";
@@ -62,7 +61,8 @@ async function askGemini(messages, lead) {
     return mockLeadBot({ message: lastUser?.content || "", lead });
   }
 
-  const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  const preferred = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  const models = [...new Set([preferred, "gemini-3.8-flash", "gemini-3.7-flash"])];
   const payload = {
     systemInstruction: {
       parts: [
@@ -78,30 +78,36 @@ async function askGemini(messages, lead) {
     },
     contents: toGeminiContents(messages),
     generationConfig: {
-      temperature: 0.35,
+      temperature: 0.4,
       responseMimeType: "application/json",
-      maxOutputTokens: 512,
     },
   };
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": key,
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(12000),
-    },
-  );
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error?.message || `Gemini ${response.status}`);
+  let lastError = null;
+  for (const model of models) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": key,
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error?.message || `Gemini ${response.status}`);
+      }
+      const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text).join("") || "";
+      return parseModelJson(text);
+    } catch (error) {
+      lastError = error;
+    }
   }
-  const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text).join("") || "";
-  return parseModelJson(text);
+  throw lastError;
 }
 
 export async function postChat(body) {
@@ -113,35 +119,14 @@ export async function postChat(body) {
     throw error;
   }
 
-  const lastUser = [...messages].reverse().find((item) => item.role === "user");
-  const userText = lastUser?.content || "";
-
-  let result;
-  let usedLocal = false;
-  if (shouldUseLocalChat(userText)) {
-    result = buildLocalChatReply({ message: userText, lead });
-    usedLocal = true;
-  } else {
-    try {
-      result = await askGemini(messages, lead);
-    } catch {
-      result = buildLocalChatReply({ message: userText, lead });
-      usedLocal = true;
-    }
-  }
-
+  const result = await askGemini(messages, lead);
   const extractedBANT = mergeBANT(lead.extractedBANT, result.extractedBANT);
-  const nextLead = withStatus({
-    ...lead,
-    extractedBANT,
-    contactInfo: result.contactInfo || lead.contactInfo,
-  });
-
-  sendChatToTelegram({
-    lead: nextLead,
-    userText,
+  const lastUser = [...messages].reverse().find((item) => item.role === "user");
+  const chatTelegram = await sendChatToTelegram({
+    lead: withStatus({ ...lead, extractedBANT, contactInfo: result.contactInfo || lead.contactInfo }),
+    userText: lastUser?.content || "",
     reply: result.reply,
-  }).catch(() => {});
+  }).catch((error) => ({ telegram: false, telegramReason: error.message }));
 
   return {
     reply: result.reply,
@@ -149,8 +134,8 @@ export async function postChat(body) {
     contactInfo: result.contactInfo || lead.contactInfo,
     chatSummary: result.chatSummary || lead.chatSummary,
     status: calcStatus(extractedBANT),
-    mock: usedLocal || !process.env.GEMINI_API_KEY,
-    local: usedLocal,
+    mock: !process.env.GEMINI_API_KEY,
+    ...chatTelegram,
   };
 }
 
