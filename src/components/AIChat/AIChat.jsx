@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils.js";
 
 export function AIChat() {
   const { chatOpen, openChat, closeChat, messages, lead, quizOpen } = useApp();
-  const { pending, error, sendMessage } = useAI();
+  const { pending, pendingLabel, error, sendMessage } = useAI();
   const [draft, setDraft] = useState("");
   const listRef = useRef(null);
 
@@ -20,6 +20,10 @@ export function AIChat() {
     event.preventDefault();
     sendMessage(draft);
     setDraft("");
+  }
+
+  function sendQuick(text) {
+    sendMessage(text);
   }
 
   return (
@@ -41,22 +45,45 @@ export function AIChat() {
 
           <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {messages.length === 0 ? (
-              <p className="text-sm text-mute">
-                Спросите про чат, разбор заявок или скрипты. Отвечаю по ценам в сумах и офису в Ташкенте.
-              </p>
+              <div className="space-y-3 text-sm text-mute">
+                <p>Скрипты и цены отвечают сразу. Сложные вопросы — через ИИ (до 12 сек).</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-full border border-line bg-sheet px-3 py-1.5 text-xs font-semibold text-ink hover:border-accent"
+                    onClick={() => sendQuick("Скрипты для менеджеров")}
+                  >
+                    Скрипты для менеджеров
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full border border-line bg-sheet px-3 py-1.5 text-xs font-semibold text-ink hover:border-accent"
+                    onClick={() => sendQuick("Цены пакетов в сумах")}
+                  >
+                    Цены
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full border border-line bg-sheet px-3 py-1.5 text-xs font-semibold text-ink hover:border-accent"
+                    onClick={() => sendQuick("Адрес офиса в Ташкенте")}
+                  >
+                    Офис
+                  </button>
+                </div>
+              </div>
             ) : null}
             {messages.map((item, index) => (
               <p
                 key={`${item.role}-${index}`}
                 className={cn(
-                  "max-w-[90%] px-3 py-2 text-sm",
+                  "max-w-[90%] whitespace-pre-wrap px-3 py-2 text-sm",
                   item.role === "user" ? "ml-auto rounded-2xl rounded-br-md bg-accent text-white" : "rounded-2xl rounded-bl-md bg-sheet text-ink",
                 )}
               >
                 {item.content}
               </p>
             ))}
-            {pending ? <p className="text-sm text-mute">ИИ печатает...</p> : null}
+            {pending ? <p className="text-sm text-mute">{pendingLabel || "ИИ думает…"}</p> : null}
             {error ? <p className="text-xs text-mute">{error}. Показан локальный ответ.</p> : null}
           </div>
 
