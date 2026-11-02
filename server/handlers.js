@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { leadBotSystemPrompt } from "../src/lib/prompt.js";
 import { mockLeadBot } from "../src/lib/mockAI.js";
+import { extractBANTFromConversation } from "../src/lib/parseBANT.js";
 import { calcStatus, mergeBANT, withStatus } from "../src/lib/lead.js";
 import { sendLeadToTelegram, sendChatToTelegram } from "./telegram.js";
 
@@ -58,7 +59,7 @@ async function askGemini(messages, lead) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
     const lastUser = [...messages].reverse().find((item) => item.role === "user");
-    return mockLeadBot({ message: lastUser?.content || "", lead });
+    return mockLeadBot({ message: lastUser?.content || "", messages, lead });
   }
 
   const preferred = process.env.GEMINI_MODEL || "gemini-2.0-flash";
@@ -125,9 +126,16 @@ export async function postChat(body) {
     result = await askGemini(messages, lead);
   } catch (geminiError) {
     const lastUser = [...messages].reverse().find((item) => item.role === "user");
-    result = mockLeadBot({ message: lastUser?.content || "", lead });
+    result = mockLeadBot({ message: lastUser?.content || "", messages, lead });
     result.geminiError = geminiError?.message;
   }
+
+  const parsedBANT = extractBANTFromConversation({
+    message: [...messages].reverse().find((item) => item.role === "user")?.content || "",
+    messages,
+    lead: { ...lead, extractedBANT: mergeBANT(lead.extractedBANT, result.extractedBANT) },
+  });
+  result.extractedBANT = mergeBANT(result.extractedBANT, parsedBANT);
 
   const extractedBANT = mergeBANT(lead.extractedBANT, result.extractedBANT);
   const lastUser = [...messages].reverse().find((item) => item.role === "user");

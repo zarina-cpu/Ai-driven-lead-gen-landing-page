@@ -56,13 +56,13 @@ export function useAI() {
       });
       await sendChatContactIfReady(nextLead);
       if (payload.mock && payload.geminiError) {
-        setError("Gemini занят — показан локальный ответ.");
+        setError("Gemini занят — ответ по базе знаний.");
       }
     } catch (requestError) {
-      const fallback = mockLeadBot({ message: content, lead });
+      const fallback = mockLeadBot({ message: content, messages: nextMessages, lead });
       applyChatResult(fallback);
       if (requestError.message.includes("не JSON") || requestError.message.includes("server error")) {
-        setError("Сервер чата недоступен — показан локальный ответ.");
+        setError("Сервер чата недоступен — ответ по базе знаний.");
       } else {
         setError(requestError.message);
       }
