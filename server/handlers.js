@@ -61,8 +61,8 @@ async function askGemini(messages, lead) {
     return mockLeadBot({ message: lastUser?.content || "", lead });
   }
 
-  const preferred = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-  const models = [...new Set([preferred, "gemini-3.8-flash", "gemini-3.7-flash"])];
+  const preferred = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const models = [...new Set([preferred, "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.8-flash", "gemini-3.7-flash"])];
   const payload = {
     systemInstruction: {
       parts: [
@@ -95,6 +95,7 @@ async function askGemini(messages, lead) {
             "x-goog-api-key": key,
           },
           body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(15000),
         },
       );
       const data = await response.json();
@@ -119,7 +120,15 @@ export async function postChat(body) {
     throw error;
   }
 
-  const result = await askGemini(messages, lead);
+  let result;
+  try {
+    result = await askGemini(messages, lead);
+  } catch (geminiError) {
+    const lastUser = [...messages].reverse().find((item) => item.role === "user");
+    result = mockLeadBot({ message: lastUser?.content || "", lead });
+    result.geminiError = geminiError?.message;
+  }
+
   const extractedBANT = mergeBANT(lead.extractedBANT, result.extractedBANT);
   const lastUser = [...messages].reverse().find((item) => item.role === "user");
   const chatTelegram = await sendChatToTelegram({
@@ -134,7 +143,8 @@ export async function postChat(body) {
     contactInfo: result.contactInfo || lead.contactInfo,
     chatSummary: result.chatSummary || lead.chatSummary,
     status: calcStatus(extractedBANT),
-    mock: !process.env.GEMINI_API_KEY,
+    mock: Boolean(result.geminiError) || !process.env.GEMINI_API_KEY,
+    geminiError: result.geminiError || null,
     ...chatTelegram,
   };
 }

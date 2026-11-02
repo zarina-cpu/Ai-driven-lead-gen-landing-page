@@ -25,8 +25,14 @@ export function useAI() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: nextMessages, lead }),
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Чат не ответил");
+      const raw = await response.text();
+      let payload = {};
+      try {
+        payload = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(raw.trim().slice(0, 120) || "Чат вернул не JSON");
+      }
+      if (!response.ok) throw new Error(payload.error || raw.trim().slice(0, 120) || "Чат не ответил");
 
       const valueFromText = extractContactFromText(content);
       const contactInfo =
@@ -49,10 +55,17 @@ export function useAI() {
         chatSummary: payload.chatSummary,
       });
       await sendChatContactIfReady(nextLead);
+      if (payload.mock && payload.geminiError) {
+        setError("Gemini занят — показан локальный ответ.");
+      }
     } catch (requestError) {
       const fallback = mockLeadBot({ message: content, lead });
       applyChatResult(fallback);
-      setError(requestError.message);
+      if (requestError.message.includes("не JSON") || requestError.message.includes("server error")) {
+        setError("Сервер чата недоступен — показан локальный ответ.");
+      } else {
+        setError(requestError.message);
+      }
     } finally {
       setPending(false);
     }
