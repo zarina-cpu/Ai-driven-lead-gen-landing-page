@@ -92,7 +92,7 @@ export function QuizModal() {
     setName("");
     setContact("");
     setError("");
-    setSubmitState({ sent: false, error: "" });
+    setSubmitState({ sent: false, error: "", telegramWarning: "" });
   }
 
   return (
@@ -122,6 +122,12 @@ export function QuizModal() {
                     <p className="mt-3 text-sm text-mute">
                       Менеджер в Ташкенте увидит бюджет, задачу, срок и контакт. Статус уже посчитан на карточке лида.
                     </p>
+                    {submitState.telegramWarning ? (
+                      <p className="mt-4 rounded-xl border border-hot/30 bg-sheet px-4 py-3 text-sm text-hot">
+                        В Telegram не ушло: {submitState.telegramWarning} На Vercel добавьте переменные TELEGRAM_BOT_TOKEN и
+                        TELEGRAM_CHAT_ID (Production) и сделайте Redeploy.
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
 

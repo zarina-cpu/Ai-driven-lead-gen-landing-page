@@ -10,7 +10,7 @@ export function AppProvider({ children }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [lead, setLead] = useState(emptyLead);
   const [messages, setMessages] = useState([]);
-  const [submitState, setSubmitState] = useState({ sent: false, error: "" });
+  const [submitState, setSubmitState] = useState({ sent: false, error: "", telegramWarning: "" });
 
   function openQuiz() {
     setQuizOpen(true);
@@ -65,7 +65,11 @@ export function AppProvider({ children }) {
 
     setLead(nextLead);
     const result = await submitLeadToCRM(nextLead);
-    setSubmitState({ sent: true, error: "" });
+    setSubmitState({
+      sent: true,
+      error: "",
+      telegramWarning: result.telegram === false ? result.telegramReason || "Telegram не отправил уведомление." : "",
+    });
     return result;
   }
 
@@ -84,8 +88,12 @@ export function AppProvider({ children }) {
   async function sendChatContactIfReady(nextLead) {
     if (!nextLead.contactInfo?.value || submitState.sent) return;
     try {
-      await submitLeadToCRM(nextLead);
-      setSubmitState({ sent: true, error: "" });
+      const result = await submitLeadToCRM(nextLead);
+      setSubmitState({
+        sent: true,
+        error: "",
+        telegramWarning: result.telegram === false ? result.telegramReason || "Telegram не отправил уведомление." : "",
+      });
     } catch (error) {
       setSubmitState({ sent: false, error: error.message });
     }
