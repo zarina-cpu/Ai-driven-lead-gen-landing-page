@@ -2,6 +2,7 @@ import { useState } from "react";
 import { mockLeadBot } from "@/lib/mockAI.js";
 import { extractContactFromText, isValidContact } from "@/lib/validate.js";
 import { withStatus } from "@/lib/lead.js";
+import { apiUrl } from "@/lib/apiBase.js";
 import { useApp } from "@/context/AppContext.jsx";
 
 export function useAI() {
@@ -19,7 +20,7 @@ export function useAI() {
     setError("");
 
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch(apiUrl("/api/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: nextMessages, lead }),
