@@ -1,0 +1,8 @@
+node_modules
+dist
+.cursor
+.env
+.env.local
+data/leads.json
+*.log
+.DS_Store
