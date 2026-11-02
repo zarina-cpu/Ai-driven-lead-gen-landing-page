@@ -1,16 +1,18 @@
 /**
  * Копирует переменные из .env в Vercel (Production).
- * Нужны: vercel login и vercel link в корне проекта.
  *
- *   npm run vercel:env
+ *   npx vercel link --yes --project aidrivenleadgenlandingpage
+ *   npm run vercel:env -- --yes
+ *   npx vercel deploy --prod -y
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import readline from "node:readline";
 
 const root = process.cwd();
 const envPath = path.join(root, ".env");
+const projectName = process.env.VERCEL_PROJECT || "aidrivenleadgenlandingpage";
+const autoYes = process.argv.includes("--yes");
 const keys = ["GEMINI_API_KEY", "GEMINI_MODEL", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "CRM_WEBHOOK_URL"];
 
 function parseEnv(text) {
@@ -30,15 +32,25 @@ function parseEnv(text) {
   return out;
 }
 
-function runVercel(args, input) {
-  const result = spawnSync("npx", ["vercel", ...args], {
+function runVercel(args) {
+  return spawnSync("npx", ["vercel", ...args], {
     cwd: root,
-    input,
     encoding: "utf8",
     shell: true,
     stdio: ["pipe", "pipe", "pipe"],
   });
-  return result;
+}
+
+function ensureLinked() {
+  const linked = fs.existsSync(path.join(root, ".vercel", "project.json"));
+  if (linked) return true;
+  console.log(`Привязка к проекту ${projectName}…`);
+  const link = runVercel(["link", "--yes", "--project", projectName]);
+  if (link.status !== 0) {
+    console.error(link.stderr || link.stdout);
+    return false;
+  }
+  return true;
 }
 
 if (!fs.existsSync(envPath)) {
@@ -46,40 +58,53 @@ if (!fs.existsSync(envPath)) {
   process.exit(1);
 }
 
-const env = parseEnv(fs.readFileSync(envPath, "utf8"));
-const missing = keys.filter((key) => key !== "CRM_WEBHOOK_URL" && key !== "GEMINI_MODEL" && !env[key]?.trim());
-if (missing.length) {
-  console.warn("В .env пусто (заполните перед синком):", missing.join(", "));
-}
-
-const whoami = runVercel(["whoami"], "");
-if (whoami.status !== 0) {
-  console.error("Vercel CLI не авторизован. Выполните: npx vercel login");
+if (!ensureLinked()) {
   process.exit(1);
 }
-console.log("Vercel:", (whoami.stdout || whoami.stderr).trim());
 
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const answer = await new Promise((resolve) => {
-  rl.question("Записать переменные в Production на Vercel? (y/N) ", resolve);
-});
-rl.close();
-if (answer.trim().toLowerCase() !== "y") {
-  console.log("Отменено.");
+const env = parseEnv(fs.readFileSync(envPath, "utf8"));
+const required = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "GEMINI_API_KEY"];
+const missingRequired = required.filter((key) => !env[key]?.trim());
+if (missingRequired.length) {
+  console.error("В .env не хватает:", missingRequired.join(", "));
+  process.exit(1);
+}
+
+if (!autoYes) {
+  console.log("Добавлю переменные в Production проекта", projectName);
+  console.log("Запустите с флагом --yes для подтверждения: npm run vercel:env -- --yes");
   process.exit(0);
 }
 
 for (const key of keys) {
   const value = env[key]?.trim();
   if (!value) continue;
-  runVercel(["env", "rm", key, "production", "-y"], "");
-  const add = runVercel(["env", "add", key, "production"], `${value}\n`);
+  const add = runVercel([
+    "env",
+    "add",
+    key,
+    "--environment",
+    "production",
+    "--value",
+    value,
+    "--yes",
+    "--force",
+    "--sensitive",
+  ]);
   if (add.status === 0) {
     console.log("OK", key);
   } else {
-    console.error("FAIL", key, add.stderr || add.stdout);
+    console.error("FAIL", key, (add.stderr || add.stdout).split("\n")[0]);
+    process.exit(1);
   }
 }
 
-console.log("\nГотово. Vercel → Deployments → Redeploy последнего билда (Production).");
-console.log("Проверка: https://aidrivenleadgenlandingpage.vercel.app/api/telegram-check");
+console.log("\nПеременные на Vercel (Production) обновлены.");
+console.log("Запускаю production deploy…");
+const deploy = runVercel(["deploy", "--prod", "-y", "--no-wait"]);
+if (deploy.status !== 0) {
+  console.error(deploy.stderr || deploy.stdout);
+  process.exit(1);
+}
+console.log((deploy.stdout || deploy.stderr).trim());
+console.log("\nПроверка через ~1 мин: https://aidrivenleadgenlandingpage.vercel.app/api/telegram-check");
