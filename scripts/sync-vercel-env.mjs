@@ -1,9 +1,7 @@
 /**
- * Копирует переменные из .env в Vercel (Production).
+ * Копирует переменные из .env в Vercel (Production, Preview, Development).
  *
- *   npx vercel link --yes --project aidrivenleadgenlandingpage
  *   npm run vercel:env -- --yes
- *   npx vercel deploy --prod -y
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -13,6 +11,8 @@ const root = process.cwd();
 const envPath = path.join(root, ".env");
 const projectName = process.env.VERCEL_PROJECT || "aidrivenleadgenlandingpage";
 const autoYes = process.argv.includes("--yes");
+const skipDeploy = process.argv.includes("--no-deploy");
+const environments = "production,preview,development";
 const keys = ["GEMINI_API_KEY", "GEMINI_MODEL", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "CRM_WEBHOOK_URL"];
 
 function parseEnv(text) {
@@ -42,8 +42,7 @@ function runVercel(args) {
 }
 
 function ensureLinked() {
-  const linked = fs.existsSync(path.join(root, ".vercel", "project.json"));
-  if (linked) return true;
+  if (fs.existsSync(path.join(root, ".vercel", "project.json"))) return true;
   console.log(`Привязка к проекту ${projectName}…`);
   const link = runVercel(["link", "--yes", "--project", projectName]);
   if (link.status !== 0) {
@@ -58,9 +57,7 @@ if (!fs.existsSync(envPath)) {
   process.exit(1);
 }
 
-if (!ensureLinked()) {
-  process.exit(1);
-}
+if (!ensureLinked()) process.exit(1);
 
 const env = parseEnv(fs.readFileSync(envPath, "utf8"));
 const required = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "GEMINI_API_KEY"];
@@ -71,8 +68,8 @@ if (missingRequired.length) {
 }
 
 if (!autoYes) {
-  console.log("Добавлю переменные в Production проекта", projectName);
-  console.log("Запустите с флагом --yes для подтверждения: npm run vercel:env -- --yes");
+  console.log("Синхронизация .env → Vercel (", environments, ")");
+  console.log("npm run vercel:env -- --yes");
   process.exit(0);
 }
 
@@ -84,7 +81,7 @@ for (const key of keys) {
     "add",
     key,
     "--environment",
-    "production",
+    environments,
     "--value",
     value,
     "--yes",
@@ -94,17 +91,21 @@ for (const key of keys) {
   if (add.status === 0) {
     console.log("OK", key);
   } else {
-    console.error("FAIL", key, (add.stderr || add.stdout).split("\n")[0]);
+    console.error("FAIL", key, (add.stderr || add.stdout).split("\n").slice(0, 3).join(" "));
     process.exit(1);
   }
 }
 
-console.log("\nПеременные на Vercel (Production) обновлены.");
-console.log("Запускаю production deploy…");
-const deploy = runVercel(["deploy", "--prod", "-y", "--no-wait"]);
-if (deploy.status !== 0) {
-  console.error(deploy.stderr || deploy.stdout);
-  process.exit(1);
+console.log("\nПеременные на Vercel обновлены:", environments);
+
+if (!skipDeploy) {
+  console.log("Production deploy…");
+  const deploy = runVercel(["deploy", "--prod", "-y", "--no-wait"]);
+  if (deploy.status !== 0) {
+    console.error(deploy.stderr || deploy.stdout);
+    process.exit(1);
+  }
+  console.log("Deploy запущен.");
 }
-console.log((deploy.stdout || deploy.stderr).trim());
-console.log("\nПроверка через ~1 мин: https://aidrivenleadgenlandingpage.vercel.app/api/telegram-check");
+
+console.log("Проверка: https://aidrivenleadgenlandingpage.vercel.app/api/telegram-check");

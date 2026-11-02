@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "telegram:chat-id": "node scripts/telegram-chat-id.mjs",
-    "vercel:env": "node scripts/sync-vercel-env.mjs"
+    "vercel:env": "node scripts/sync-vercel-env.mjs",
+    "vercel:setup": "node scripts/sync-vercel-env.mjs --yes"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
