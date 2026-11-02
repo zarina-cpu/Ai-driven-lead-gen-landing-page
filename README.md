@@ -17,8 +17,22 @@ npm run dev
 ### Vercel
 
 1. Import репозитория, Framework Preset: **Vite**.
-2. **Environment Variables** (Production): `GEMINI_API_KEY`, `GEMINI_MODEL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, при необходимости `CRM_WEBHOOK_URL`.
-3. После push в `main` — redeploy.
+2. **Environment Variables** — только **Production** (галочка Production, не только Preview):
+
+   | Name | Пример |
+   |------|--------|
+   | `TELEGRAM_BOT_TOKEN` | из @BotFather |
+   | `TELEGRAM_CHAT_ID` | `194681450` или `npm run telegram:chat-id` |
+   | `GEMINI_API_KEY` | Google AI Studio |
+   | `GEMINI_MODEL` | `gemini-3.8-flash` |
+
+   Имена **без** префикса `VITE_` (это серверные секреты).
+
+3. **Deployments** → последний → **Redeploy** (обязательно после добавления переменных).
+
+4. Проверка: `/api/telegram-check` → `"ready": true`.
+
+   Из терминала (после `npx vercel login` и `npx vercel link`): `npm run vercel:env`
 
 ## Стек
 
